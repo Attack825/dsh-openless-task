@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="OpenLess voice task bridge">
+  <rect width="128" height="128" rx="28" fill="#17233b"/>
+  <path d="M30 36c0-8 6-14 14-14h40c8 0 14 6 14 14v28c0 8-6 14-14 14H64L44 94V78h-0.5C35 78 30 72 30 64z" fill="#f2f6ff"/>
+  <g fill="#2f6fed">
+    <rect x="44" y="44" width="6" height="20" rx="3"/>
+    <rect x="55" y="36" width="6" height="36" rx="3"/>
+    <rect x="66" y="42" width="6" height="24" rx="3"/>
+    <rect x="77" y="38" width="6" height="32" rx="3"/>
+  </g>
+  <circle cx="99" cy="97" r="17" fill="#22c55e"/>
+  <path d="M91 97.5l5.4 5.4L107 92" fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

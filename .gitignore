@@ -1,0 +1,18 @@
+# OS / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# 依赖与构建产物
+node_modules/
+coverage/
+dist/
+
+# 运行期数据（插件会把日志和绑定状态写到这里，不进仓库）
+*.log
+state.json
+tmp/
+.env
+.env.*

@@ -1,0 +1,5 @@
+- insert:
+    - id: openless-task
+      name: dsh-openless-task
+      config:
+        enabled: true

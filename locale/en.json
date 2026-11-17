@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenLess voice tasks",
+    "description": "Turns what you dictate with OpenLess into tasks in one fixed DeepSeek Harness session. OpenLess writes its transcript to history.json; this plugin picks up new voice entries with real text, skips empty or failed transcriptions, and delivers them to the session you bound with the openless_bind_here tool. The model lists the tasks and calls openless_task_confirm, which opens a small standalone window with Execute and Ignore; until you choose, a tool guard blocks acting tools such as run_code, bash, pwsh, write, edit and subagent. Closing the window counts as Ignore. No task list means no window. Requires OpenLess on Windows, Edge or Chrome for the window, and a bound session. Turning the plugin off stops all pickup and confirmation."
+  }
+}

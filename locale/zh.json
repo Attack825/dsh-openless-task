@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenLess 语音任务",
+    "description": "把你用 OpenLess 说的话变成固定 DSH 会话里的任务。OpenLess 把转写写进 history.json；本插件只接手新的、有正文的语音条目，空转写和失败条目直接跳过，然后投递到用 openless_bind_here 绑定的会话。模型列出任务后调用 openless_task_confirm，弹出一个独立小窗，上面只有「执行」和「忽略」；在你选择之前，工具守卫会拒绝 run_code、bash、pwsh、write、edit、subagent 等动手类工具。关掉小窗等同于「忽略」。没有任务清单时不弹窗。需要 Windows 上的 OpenLess、Edge 或 Chrome 来显示小窗，并且已经绑定会话。关掉插件就停止接手和确认。"
+  }
+}
