@@ -7,8 +7,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { createGate, matchesPattern } from '../lib/gate.js'
+import { createGate, isExemptTool, matchesPattern } from '../lib/gate.js'
 import { pickDefaultSession } from '../lib/default-session.js'
+import { waitForIdle } from '../lib/idle.js'
 import { renderPage } from '../lib/page.js'
 import { createPopup } from '../lib/popup.js'
 import { createWatcher, isUsableEntry, parseHistory } from '../lib/watcher.js'
@@ -225,4 +226,64 @@ test('弹窗：找不到浏览器时不执行', async () => {
     process.env['ProgramFiles(x86)'] = original.ProgramFilesX86
     process.env.LOCALAPPDATA = original.LOCALAPPDATA
   }
+})
+
+test('拒绝理由把「怎么继续」说清楚', () => {
+  const config = { pendingTtlMs: 5000, actingTools: ['run_code'] }
+  const gate = createGate({ read: (key) => config[key], log: () => {} })
+  gate.arm('s1')
+  const denied = gate.check({ name: 'run_code', agent: { id: 's1' } })
+  assert.ok(denied.reason.includes('openless_task_confirm'))
+  assert.ok(denied.reason.includes('read'))
+  assert.ok(denied.reason.includes('grep'))
+  // 只读工具与豁免工具始终放行，这正是解锁的唯一通道。
+  assert.equal(gate.check({ name: 'read', agent: { id: 's1' } }), undefined)
+  assert.equal(gate.check({ name: 'openless_task_confirm', agent: { id: 's1' } }), undefined)
+  assert.equal(gate.check({ name: 'openless_bind_here', agent: { id: 's1' } }), undefined)
+  assert.equal(isExemptTool('openless_task_confirm'), true)
+  assert.equal(isExemptTool('run_code'), false)
+})
+
+test('等空闲：空闲会话立即返回，不挂旗标也不等待', async () => {
+  const result = await waitForIdle({ isRunning: async () => false, timeoutMs: 1000, intervalMs: 10 })
+  assert.deepEqual(result, { idle: true, waitedMs: 0, unknown: false })
+})
+
+test('等空闲：忙的时候等到空闲为止', async () => {
+  let calls = 0
+  const result = await waitForIdle({
+    isRunning: async () => { calls += 1; return calls < 3 },
+    timeoutMs: 2000,
+    intervalMs: 5,
+  })
+  assert.equal(result.idle, true)
+  assert.equal(result.unknown, false)
+  assert.equal(calls, 3)
+})
+
+test('等空闲：一直忙就超时，返回 idle=false', async () => {
+  let clock = 0
+  const result = await waitForIdle({
+    isRunning: async () => true,
+    timeoutMs: 100,
+    intervalMs: 50,
+    now: () => clock,
+    sleep: async (ms) => { clock += ms },
+  })
+  assert.equal(result.idle, false)
+  assert.equal(result.unknown, false)
+})
+
+test('等空闲：0 预算时忙就立刻放弃等待', async () => {
+  const result = await waitForIdle({ isRunning: async () => true, timeoutMs: 0, intervalMs: 10 })
+  assert.equal(result.idle, false)
+})
+
+test('等空闲：读不到忙闲时标记 unknown，由调用方决定是否挂旗标', async () => {
+  const result = await waitForIdle({
+    isRunning: async () => { throw new Error('list failed') },
+    timeoutMs: 100,
+    intervalMs: 10,
+  })
+  assert.equal(result.unknown, true)
 })

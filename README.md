@@ -31,6 +31,17 @@
 2. **首次启动会自动绑定最近活跃的会话**，会话 id 存进 `%LOCALAPPDATA%\dsh-openless-task\state.json`——装完就能用，不需要手工绑定。想换会话时，在那个会话里说一句「绑定 OpenLess 到这里」（调用 `openless_bind_here`）即可改绑。
 3. 用 OpenLess 的全局热键说话。说完、转写落盘后，任务会出现在绑定的会话；需要确认时小窗会自动弹出。
 
+## 待确认状态怎么工作（别把自己锁死）
+
+插件的闸门只在**一个回合**里生效：这条语音自己的回合。
+
+- 收到语音时如果会话正忙（你上一轮还在跑），插件先等它空闲，再挂「待确认」旗标并投递——这样被拦的一定是看到语音原文的那一轮。
+- 一直忙到 `idleWaitMs`（默认 2 分钟）就照投不挂旗标：宁可这条少一层拦截，也不把你正在跑的回合锁死。
+- 旗标最多挂 `pendingTtlMs`（默认 3 分钟），到期自动失效；确认工具返回（执行/忽略/超时/浏览器不可用）也会立即清除。
+- `openless_task_confirm` 与 `openless_bind_here` 永远不被闸门拦；只读工具（`read` / `grep` / `glob` 等）也一直放行。被拦只可能是 `run_code` / `pwsh` / `write` 这类动手工具。
+
+排查时看 `%LOCALAPPDATA%\dsh-openless-task\openless-task.log`：`gate armed` → `popup opened` → `confirm result ...` 三段齐全才算走完；只有 `gate denied` 没有 `popup opened`，说明模型没调确认工具，不是卡片打不开。
+
 ## 卸载
 
 在插件管理里移除本插件即可；它不写任何 Session 事件，也不留后台进程。状态文件和日志在 `%LOCALAPPDATA%\dsh-openless-task\`，可一并删除。

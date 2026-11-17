@@ -94,6 +94,7 @@ dsh-openless-task/
 | `sessionId` | string, `''` | 固定会话；用绑定工具写入 |
 | `confirmTimeoutMs` | number, `300000`（60000–1800000） | 小窗等待上限 |
 | `pendingTtlMs` | number, `180000`（30000–600000） | 「待确认」旗标最长挂起时间 |
+| `idleWaitMs` | number, `120000`（0–600000） | 会话正忙时最多等多久再投递；0 = 直接投递且不挂旗标 |
 | `browserPath` | string, `''` | 空 = 自动找 Edge/Chrome |
 | `actingTools` | string[]（默认见 §5.9） | 确认前被守卫拒绝的工具名 |
 | `maxPromptChars` | number, `4000` | 超长转写截断并标注 |
@@ -114,7 +115,7 @@ dsh-openless-task/
 ### 5.4 投递到固定会话
 
 - 未绑定 `sessionId`：不投递，弹一次「未绑定会话」错误小窗（浏览器可用时），然后静默。
-- 投递前挂起旗标（§5.9）；投递失败则撤销旗标并弹错误小窗。
+- 投递前先等会话空闲（`sessionController.list()` 的 `running`），再挂旗标（§5.9）；一直忙到 `idleWaitMs`（默认 120000）就照投但不挂旗标——旗标只能属于看到语音原文的那一个回合，否则会误伤用户上一轮的 `run_code`/`pwsh`，模型反复重试而确认卡片永远不会被调用（2026-11-17 实测）。投递失败则撤销旗标并弹错误小窗。
 - 调用：
 
 ```js
@@ -202,7 +203,8 @@ await editor.edit(entry, current => ({ ...current, sessionId: id }))
 
 ### 5.9 执行闸门（lib/gate.js）
 
-- 每次投递前设置 `pending = { sessionId, at }`；`openless_task_confirm` 返回、投递失败、或 `pendingTtlMs` 到期时清除。
+- 仅在目标会话空闲时、投递前设置 `pending = { sessionId, at }`；忙闲读不到（`unknown`）按「忙」处理并照常挂旗标。`openless_task_confirm` 返回、投递失败、或 `pendingTtlMs` 到期时清除。
+- 拒绝理由必须给出继续路径：直接调 `openless_task_confirm`（不经 `run_code`），只读改用 `read`/`grep`/`glob`。
 - 注册 `ctx.tools.guard(exec => ...)`：
   - 仅当 `exec.agent?.id === pending.sessionId` 且未过期时生效；
   - 允许白名单：`openless_task_confirm`、`openless_bind_here`、只读工具（`read` / `grep` / `glob` / `web_search` / `web_fetch` / `ask_user_question` / `list_*`）；
@@ -218,7 +220,7 @@ await editor.edit(entry, current => ({ ...current, sessionId: id }))
 | JSON 半写入 | debounce + 100ms 重试一次 |
 | 转写为空 / `errorCode` | 跳过，日志记录 |
 | 未绑定 / 绑定失效 | 错误小窗一次（浏览器可用时），不投递 |
-| 会话正在跑别的回合 | `mode: 'queue'` 排队 |
+| 会话正在跑别的回合 | 先等它空闲，再挂旗标并 `mode: 'queue'` 投递；超 `idleWaitMs` 则投递但不挂旗标 |
 | 浏览器找不到 | 工具返回 `popup: 'unavailable'`，不执行 |
 | 用户关窗 | 心跳判定 → 按 `ignore` 返回（≤6s） |
 | 用户 5 分钟不点 | `timeout`，按「不执行」处理 |

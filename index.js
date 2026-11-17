@@ -13,8 +13,9 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { createGate } from './lib/gate.js'
+import { createGate, isExemptTool } from './lib/gate.js'
 import { pickDefaultSession } from './lib/default-session.js'
+import { waitForIdle } from './lib/idle.js'
 import { createPopup } from './lib/popup.js'
 import { readState, writeState } from './lib/state.js'
 import { createWatcher } from './lib/watcher.js'
@@ -44,9 +45,6 @@ export const DEFAULT_ACTING_TOOLS = [
   'schedule_*',
   'job_*',
 ]
-
-/** 守卫与工具都放行的名字。 */
-const GATE_EXEMPT = new Set(['openless_task_confirm', 'openless_bind_here'])
 
 /** Windows 上 OpenLess 的默认历史文件位置。 */
 function defaultHistoryPath() {
@@ -123,6 +121,8 @@ export const Config = z.object({
   confirmTimeoutMs: z.number().min(60000).max(1800000).default(300000),
   /** 「待确认」旗标最长挂起时间（毫秒），防止会话被永久卡住。 */
   pendingTtlMs: z.number().min(30000).max(600000).default(180000),
+  /** 会话正忙时最多等多久再投递（毫秒）；0 = 不等，直接投递且不挂旗标。 */
+  idleWaitMs: z.number().min(0).max(600000).default(120000),
   /** 浏览器路径；空 = 自动找 Edge / Chrome。 */
   browserPath: z.string().default(''),
   /** 确认前被守卫拒绝的工具名；`*` 结尾表示前缀。 */
@@ -287,7 +287,23 @@ export function apply(ctx, config) {
       return
     }
     lastTranscript = text
-    gate.arm(target)
+    // 只有会话空闲时才挂旗标：忙的时候挂，会把你当前这一轮（还没看到语音的）回合里的
+    // run_code / pwsh 一起拒掉，模型于是反复重试，确认卡片永远没人去调。
+    const readiness = await waitForIdle({
+      isRunning: async () => (await lookupSession(target))?.running === true,
+      timeoutMs: Number(read('idleWaitMs')) || 0,
+      intervalMs: 1000,
+    })
+    if (readiness.unknown) {
+      log('session busy state unknown; arming the gate anyway')
+      gate.arm(target)
+    } else if (readiness.idle) {
+      if (readiness.waitedMs > 1000) log('waited', readiness.waitedMs, 'ms for an idle session')
+      gate.arm(target)
+    } else {
+      // 等不到空闲就别挂旗标：宁可这条语音少一层拦截，也不把你正在跑的回合锁死。
+      log('session stayed busy for', readiness.waitedMs, 'ms; delivering without the confirm gate')
+    }
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
       await ctx.sessionController.prompt({
@@ -417,7 +433,7 @@ export function apply(ctx, config) {
   ctx.effect(() => ctx.tools.register(bindTool))
   ctx.effect(() => ctx.tools.guard((exec) => {
     const pending = gate.check(exec)
-    if (pending && !GATE_EXEMPT.has(String(exec?.name ?? ''))) {
+    if (pending && !isExemptTool(exec?.name)) {
       log('gate denied', exec?.name, 'in', exec?.agent?.id)
     }
     return pending
